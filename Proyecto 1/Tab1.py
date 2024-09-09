@@ -126,19 +126,54 @@ fig.update_layout(
 )
 
 df1 = pd.read_csv('Grafica4.csv')
-import plotly.express as px  # Add this line at the top of your code
+import pandas as pd
+import numpy as np
+import plotly.express as px
+from sklearn.linear_model import LinearRegression
 
-# Select only numeric columns for summing
+# Asegúrate de que la columna 'Date' esté en formato datetime
+df1['Date'] = pd.to_datetime(df1['Date'])
 
+# Seleccionar solo columnas numéricas
 numeric_columns = df1.select_dtypes(include=['float64', 'int64']).columns
 
-# Group by 'Date' and sum only numeric columns
+# Agrupar los datos por 'Date' y sumar solo las columnas numéricas
 data_grouped = df1.groupby('Date')[numeric_columns].sum().reset_index()
 
-# Line chart for revenue (Bike Rentals over time)
-fig_revenue_cost = px.line(data_grouped, x='Date', y='Utilidad Neta', 
-                        title="Utilidad Neta en el Tiempo", 
-                        labels={'Net Income'})
+# Convertir las fechas a valores numéricos (ordinales) para el modelo de regresión lineal
+data_grouped['Date_ordinal'] = data_grouped['Date'].map(pd.Timestamp.toordinal)
+
+# Seleccionar las características (Date ordinal) y el target (Utilidad Neta)
+X = data_grouped[['Date_ordinal']]
+y = data_grouped['Utilidad Neta']
+
+# Crear y entrenar el modelo de regresión lineal
+model = LinearRegression()
+model.fit(X, y)
+
+# Predecir los valores para el siguiente año (12 meses más adelante)
+future_dates = pd.date_range(start=data_grouped['Date'].max() + pd.DateOffset(months=1), periods=12, freq='M')
+future_ordinal = np.array([date.toordinal() for date in future_dates]).reshape(-1, 1)
+
+# Hacer las predicciones para el futuro
+predictions = model.predict(future_ordinal)
+
+# Crear un DataFrame con las predicciones para el siguiente año
+predicted_df = pd.DataFrame({'Date': future_dates, 'Utilidad Neta': predictions})
+
+# Concatenar los datos originales con las predicciones
+df_with_predictions = pd.concat([data_grouped[['Date', 'Utilidad Neta']], predicted_df], ignore_index=True)
+
+# Filtrar los datos para el rango de fechas entre diciembre de 2018 y diciembre de 2019
+start_date = '2018-12-01'
+end_date = '2019-12-31'
+df_filtered = df_with_predictions[(df_with_predictions['Date'] >= start_date) & 
+                                  (df_with_predictions['Date'] <= end_date)]
+
+# Graficar los datos filtrados
+fig_revenue_cost = px.line(df_filtered, x='Date', y='Utilidad Neta', 
+                           title="Predicción de  la Utilidad Neta ", 
+                           labels={'Utilidad Neta': 'Net Income'})
 
 df2 = pd.read_csv('Grafica5.csv')
 # Exclude non-numeric columns when grouping and summing
